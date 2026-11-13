@@ -24,6 +24,40 @@ st.markdown('''
 st.title('📈 StockWise AI')
 st.caption('Indian equity market dashboard • NSE & BSE • Technical analysis • CRISP insights • Machine-learning estimates')
 
+@st.cache_data(ttl=300, show_spinner=False)
+def get_index_snapshot(symbol: str):
+    """Return the latest two available daily index closes; never synthesize missing quotes."""
+    try:
+        hist = yf.Ticker(symbol).history(period='5d', interval='1d', auto_adjust=True)
+        if hist is None or hist.empty or 'Close' not in hist:
+            return None
+        close = pd.to_numeric(hist['Close'], errors='coerce').dropna()
+        if close.empty:
+            return None
+        latest = float(close.iloc[-1])
+        previous = float(close.iloc[-2]) if len(close) > 1 else latest
+        change = (latest / previous - 1) * 100 if previous else 0.0
+        return {'value': latest, 'change': change, 'date': close.index[-1].strftime('%d %b %Y')}
+    except Exception:
+        return None
+
+st.subheader('Indian market indices')
+index_specs = [
+    ('NIFTY 50', '^NSEI'),
+    ('BSE SENSEX', '^BSESN'),
+    ('BANK NIFTY', '^NSEBANK'),
+]
+index_cols = st.columns(3)
+for col, (label, symbol) in zip(index_cols, index_specs):
+    snapshot = get_index_snapshot(symbol)
+    if snapshot:
+        col.metric(label, f"{snapshot['value']:,.2f}", f"{snapshot['change']:+.2f}%")
+        col.caption(f"Latest available close: {snapshot['date']} · Yahoo Finance")
+    else:
+        col.metric(label, '—')
+        col.caption('Index quote currently unavailable from provider')
+st.divider()
+
 # Curated searchable universe. Any valid NSE/BSE symbol can also be entered manually.
 STOCKS = {
     'Reliance Industries': ('RELIANCE', '500325'),
