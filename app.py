@@ -16,8 +16,41 @@ st.set_page_config(page_title='StockWise AI', page_icon='📈', layout='wide', i
 # --------------------------- Styling ---------------------------
 st.markdown('''
 <style>
-.block-container{padding-top:1.2rem;padding-bottom:2rem;max-width:none;width:100%;padding-left:2rem;padding-right:2rem}
-[data-testid="stMetric"]{background:rgba(120,120,120,.08);padding:14px;border-radius:12px;border:1px solid rgba(128,128,128,.18)}
+/* StockWise AI — readability and information-density upgrade */
+:root {
+  --sw-ink:#17233b; --sw-muted:#52627a; --sw-line:#dce3ed;
+  --sw-surface:#ffffff; --sw-soft:#f4f7fb; --sw-accent:#5b45d6;
+}
+html, body, [class*="css"] { font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+.stApp { color:var(--sw-ink); }
+.block-container { padding:1.35rem 2.2rem 3rem; max-width:1600px; width:100%; }
+[data-testid="stHeader"] { background:rgba(255,255,255,.88); }
+h1 { font-size:2.05rem !important; line-height:1.22 !important; letter-spacing:-.035em; font-weight:780 !important; color:#14213a !important; margin-bottom:.35rem !important; }
+h2 { font-size:1.48rem !important; line-height:1.3 !important; font-weight:740 !important; color:#1b2a45 !important; margin-top:1.35rem !important; }
+h3 { font-size:1.12rem !important; line-height:1.35 !important; font-weight:700 !important; color:#263752 !important; }
+p, li, label, [data-testid="stCaptionContainer"], .stMarkdown { color:var(--sw-ink); }
+p, li { font-size:1rem; line-height:1.62; }
+[data-testid="stCaptionContainer"] p, .stCaption { color:var(--sw-muted) !important; font-size:.88rem !important; line-height:1.5 !important; }
+[data-testid="stWidgetLabel"] label, .stTextInput label, .stSelectbox label, .stMultiSelect label { color:#263752 !important; font-size:.94rem !important; font-weight:650 !important; }
+input, textarea, [data-baseweb="select"] > div { font-size:1rem !important; }
+.stTextInput input, .stNumberInput input { min-height:2.75rem; }
+[data-testid="stMetric"] { background:var(--sw-surface); padding:1rem 1.1rem; border-radius:14px; border:1px solid var(--sw-line); box-shadow:0 2px 8px rgba(25,42,70,.045); }
+[data-testid="stMetricLabel"] { color:var(--sw-muted) !important; font-size:.86rem !important; font-weight:650 !important; }
+[data-testid="stMetricValue"] { color:#14213a !important; font-size:1.55rem !important; font-weight:760 !important; line-height:1.25 !important; }
+[data-testid="stMetricDelta"] { font-size:.88rem !important; font-weight:650 !important; }
+[data-testid="stDataFrame"], [data-testid="stTable"] { border:1px solid var(--sw-line); border-radius:12px; overflow:hidden; }
+[data-testid="stDataFrame"] * { font-size:.91rem !important; }
+.stTabs [data-baseweb="tab-list"] { gap:.45rem; border-bottom:1px solid var(--sw-line); }
+.stTabs [data-baseweb="tab"] { padding:.7rem 1rem; font-size:.94rem; font-weight:650; color:#52627a; }
+.stTabs [aria-selected="true"] { color:var(--sw-accent) !important; }
+.stButton button, [data-testid="stDownloadButton"] button { min-height:2.55rem; border-radius:10px; font-weight:650; font-size:.92rem; }
+hr { border-color:var(--sw-line) !important; margin:1.5rem 0 !important; }
+[data-testid="stSidebar"] { background:#f7f9fc; border-right:1px solid var(--sw-line); }
+[data-testid="stSidebar"] * { font-size:.94rem; }
+[data-testid="stAlert"] { border-radius:12px; }
+:focus-visible { outline:3px solid rgba(91,69,214,.38) !important; outline-offset:2px; }
+@media (max-width:900px) { .block-container { padding:1rem 1rem 2rem; } h1 { font-size:1.7rem !important; } h2 { font-size:1.3rem !important; } }
+@media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none !important; transition:none !important; scroll-behavior:auto !important; } }
 </style>
 ''', unsafe_allow_html=True)
 
