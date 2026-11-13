@@ -50,6 +50,9 @@ def connect():
     c.execute("""CREATE TABLE IF NOT EXISTS mf_nav(
         scheme_code TEXT,nav_date TEXT,nav REAL,source TEXT,
         PRIMARY KEY(scheme_code,nav_date))""")
+    c.execute("""CREATE TABLE IF NOT EXISTS ipo_records(
+        source TEXT,source_url TEXT,table_number INTEGER,row_number INTEGER,
+        payload TEXT,captured_at TEXT,PRIMARY KEY(source,table_number,row_number))""")
     c.execute("""CREATE TABLE IF NOT EXISTS fno_files(
         filename TEXT PRIMARY KEY,segment TEXT,trade_date TEXT,source_url TEXT,imported_at TEXT)""")
     c.execute("""CREATE TABLE IF NOT EXISTS fno_rows(
