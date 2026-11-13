@@ -11,9 +11,9 @@ from market_data.normalized_api import router as market_data_router
 app.include_router(market_data_router)
 ```
 
-Keep the existing `app` object and all current routes unchanged.
+Keep the existing `app` object and all current routes unchanged. The Streamlit explorer is provided as `pages/2_Market_Data.py`; Streamlit discovers it automatically when the repository is launched as a multipage app from its project root. Set `STOCKWISE_API_URL` if FastAPI is not running at `http://127.0.0.1:8000`.
 
-## Routes
+## Streamlit market-data explorer\n\nThe new `pages/2_Market_Data.py` page adds three tabs: Mutual Funds (scheme search, filters, latest imported NAV and NAV history chart), F&O (real imported report rows or a clear empty state), and IPOs (captured official-source rows with a warning that they are not yet verified issue listings). It also shows table counts and source ingestion status. It calls the FastAPI endpoints below; it does not invent placeholder market data.\n\n## Routes
 
 | Route | Purpose |
 |---|---|
