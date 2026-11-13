@@ -41,6 +41,8 @@ def get_index_snapshot(symbol: str):
     except Exception:
         return None
 
+st.subheader('Search Indian stocks')
+top_search = st.text_input('Search company or NSE/BSE symbol', placeholder='Try RELIANCE, TCS, INFY or 500325', key='top_stock_search')
 st.subheader('Indian market indices')
 index_specs = [
     ('NIFTY 50', '^NSEI'),
@@ -90,6 +92,19 @@ STOCKS = {
     'Tech Mahindra': ('TECHM', '532755'),
     'ONGC': ('ONGC', '500312'),
     'Coal India': ('COALINDIA', '533278'),
+}
+SECTOR_BY_STOCK = {
+    'Reliance Industries':'Energy & Diversified','Tata Consultancy Services':'Information Technology',
+    'HDFC Bank':'Banking & Finance','ICICI Bank':'Banking & Finance','Infosys':'Information Technology',
+    'State Bank of India':'Banking & Finance','Bharti Airtel':'Telecom','ITC':'FMCG',
+    'Larsen & Toubro':'Industrials & Infrastructure','Tata Motors':'Automobiles',
+    'Tata Steel':'Metals & Mining','Wipro':'Information Technology','Axis Bank':'Banking & Finance',
+    'Kotak Mahindra Bank':'Banking & Finance','Maruti Suzuki':'Automobiles',
+    'Mahindra & Mahindra':'Automobiles','Hindustan Unilever':'FMCG','Sun Pharma':'Healthcare',
+    'NTPC':'Power & Utilities','Power Grid':'Power & Utilities','Adani Enterprises':'Energy & Diversified',
+    'Bajaj Finance':'Banking & Finance','Bajaj Finserv':'Banking & Finance','Asian Paints':'Consumer & Materials',
+    'Titan Company':'Consumer & Materials','Zomato':'Consumer & Internet','HCL Technologies':'Information Technology',
+    'Tech Mahindra':'Information Technology','ONGC':'Energy & Diversified','Coal India':'Metals & Mining',
 }
 PERIODS = {'1D': ('1d', '5m'), '3M': ('3mo', '1d'), '6M': ('6mo', '1d'), '1Y': ('1y', '1d'), '5Y': ('5y', '1wk'), 'MAX': ('max', '1mo')}
 
@@ -241,9 +256,11 @@ def ml_forecast(df: pd.DataFrame, horizon: int = 5):
 with st.sidebar:
     st.header('Market & stock')
     exchange=st.radio('Exchange', ['NSE','BSE'], horizontal=True, key='exchange_choice')
-    stock_names=list(STOCKS.keys())
-    chosen=st.selectbox('Choose a company', stock_names, index=0, key='company_choice')
-    manual=st.text_input('Or enter any symbol', placeholder='e.g. INFY or 500325', key='unique_manual_symbol')
+    sectors=['All sectors']+sorted(set(SECTOR_BY_STOCK.values()))
+    selected_sector=st.selectbox('Browse by sector',sectors,key='sector_choice')
+    stock_names=list(STOCKS.keys()) if selected_sector=='All sectors' else [n for n in STOCKS if SECTOR_BY_STOCK.get(n)==selected_sector]
+    chosen=st.selectbox('Choose a company',stock_names,index=0,key='company_choice')
+    manual=top_search.strip()
     symbol_map=STOCKS[chosen]
     default_symbol=symbol_map[0] if exchange=='NSE' else symbol_map[1]
     entered=manual.strip().upper()
