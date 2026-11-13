@@ -42,7 +42,7 @@ def get_index_snapshot(symbol: str):
         return None
 
 st.subheader('Search Indian stocks')
-top_search = st.text_input('Search company or NSE/BSE symbol', placeholder='Try RELIANCE, TCS, INFY or 500325', key='top_stock_search')
+top_search = st.text_input('Search company or NSE/BSE symbol', placeholder='Try RELIANCE, TCS, Infosys or 500325', key='top_stock_search')
 st.subheader('Indian market indices')
 index_specs = [
     ('NIFTY 50', '^NSEI'),
@@ -265,7 +265,10 @@ with st.sidebar:
     default_symbol=symbol_map[0] if exchange=='NSE' else symbol_map[1]
     entered=manual.strip().upper()
     if entered:
-        if entered.isdigit():
+        if entered in STOCKS:
+            mapped=STOCKS[entered]
+            ticker=mapped[0]+'.NS' if exchange=='NSE' else mapped[1]+'.BO'
+        elif entered.isdigit():
             ticker=entered+'.BO'
         elif entered.endswith(('.NS','.BO')):
             ticker=entered
