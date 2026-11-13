@@ -1,26 +1,40 @@
-# StockWise AI — market data integration
+# StockWise AI — connected market data
 
-## What is included
-- Streamlit page `pages/2_Market_Data.py` reads the existing SQLite market database directly. It does not require a separate API process.
-- Mutual Funds: searchable scheme master, latest imported NAV, NAV history chart.
-- F&O: displays imported report rows; shows an honest empty state if no official report has been imported.
-- IPO: displays captured source records with a warning that raw captures are not verified active IPO issues.
-- `market_data/normalized_api.py` provides optional FastAPI endpoints under `/api/market-data`.
+## Included dashboard
+The multipage Streamlit app discovers `pages/2_Market_Data.py` automatically. The page reads `data/stockwise_market.db` directly; it does not depend on a separate FastAPI process.
 
-## Database
-Default: `data/stockwise_market.db`. Override with `STOCKWISE_MARKET_DB`.
-Expected tables: `mf_schemes`, `mf_nav`, `fno_files`, `fno_rows`, `ipo_records`, `source_status`.
+- **Mutual Funds:** scheme search, latest available NAV and imported NAV history.
+- **F&O:** official NSE UDiFF derivatives bhavcopy rows.
+- **IPOs:** captured NSE, BSE and SEBI source tables, clearly marked as source captures until normalized/verified.
+- **Feed health:** counts and last ingestion result per source.
 
-## FastAPI integration (optional)
-After creating the existing FastAPI app in `api/main.py`:
+## Refresh official feeds
+From the repository root:
+```bash
+python market_data/refresh_feeds.py
+```
+Or open **Market Data → Refresh official data feeds → Refresh market data now**.
+
+The refresh job:
+1. Imports the MFAPI scheme master.
+2. Imports the latest AMFI `NAVAll.txt` snapshot.
+3. Tries the most recent 11 calendar dates for NSE's official UDiFF F&O bhavcopy archive.
+4. Captures HTML tables from official NSE, BSE and SEBI IPO pages.
+
+Raw downloads are stored in `data/market_raw/`; normalized data is stored in `data/stockwise_market.db`. The database location can be overridden with `STOCKWISE_MARKET_DB`.
+
+**Coverage caveats:** AMFI NAVAll is a latest snapshot, not complete historical NAV for every scheme. MFAPI historical NAV can be fetched scheme-by-scheme. IPO source tables are not automatically verified active IPO issues. NSE F&O data is end-of-day bhavcopy, not live options-chain quotes. If an exchange blocks a request or has no report for recent dates, the source status records the failure instead of inventing rows.
+
+## Optional FastAPI integration
+If this project has a FastAPI app, include the router after creating the app:
 ```python
 from market_data.normalized_api import router as market_data_router
 app.include_router(market_data_router)
 ```
+Endpoints are under `/api/market-data`.
 
 ## Run
-From repository root:
 ```bash
+pip install -r requirements.txt
 streamlit run app.py
 ```
-Streamlit discovers the page under `pages/` automatically. Install Streamlit, pandas, and plotly from the existing requirements file.
