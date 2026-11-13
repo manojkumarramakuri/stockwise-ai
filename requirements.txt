@@ -4,3 +4,7 @@ pandas
 numpy
 plotly
 scikit-learn
+fastapi
+uvicorn[standard]
+requests
+beautifulsoup4
