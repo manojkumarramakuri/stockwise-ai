@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import os
 import re
 import time
@@ -16,7 +17,7 @@ from mcp.client.streamable_http import streamablehttp_client
 
 NSE_MCP_URL = os.getenv("NSE_MCP_URL", "https://mcp.nseindia.in/cmmkt/mcp")
 _CACHE: dict[str, tuple[float, dict]] = {}
-_CACHE_TTL = 60
+_CACHE_TTL = 30
 _LOCK = asyncio.Lock()
 
 
@@ -46,6 +47,20 @@ async def _call(tool: str, arguments: dict) -> dict:
                         except json.JSONDecodeError:
                             pieces.append(value)
                 payload = pieces[0] if len(pieces) == 1 else pieces
+            if tool == "cm_get_stock_quote":
+                stock = payload.get("stock") if isinstance(payload, dict) else None
+                if not isinstance(stock, dict) or stock.get("symbol", "").upper() != arguments["symbol"]:
+                    raise RuntimeError("NSE response failed symbol integrity check")
+                price = stock.get("lastTradedPrice")
+                if not isinstance(price, (int, float)) or not math.isfinite(price) or price <= 0:
+                    raise RuntimeError("NSE response has missing or invalid last traded price")
+            elif tool == "cm_get_index_quote":
+                index = payload.get("index") if isinstance(payload, dict) else None
+                if not isinstance(index, dict) or index.get("indexName", "").upper() != arguments["indexName"]:
+                    raise RuntimeError("NSE response failed index identity check")
+                price = index.get("last")
+                if not isinstance(price, (int, float)) or not math.isfinite(price) or price <= 0:
+                    raise RuntimeError("NSE response has missing or invalid index value")
             output = {
                 "provider": "NSE official MCP",
                 "tool": tool,
@@ -54,6 +69,7 @@ async def _call(tool: str, arguments: dict) -> dict:
                 "realtime_verified": False,
                 "note": "Latest available NSE MCP data; provider refresh may be approximately 1 minute or longer.",
                 "cache_hit": False,
+                "exchange_timestamp": (payload.get("stock", {}).get("latestTimestamp") if tool == "cm_get_stock_quote" else payload.get("nseTimestamp") if tool == "cm_get_index_quote" else None) if isinstance(payload, dict) else None,
             }
             async with _LOCK:
                 _CACHE[key] = (time.monotonic(), output)
