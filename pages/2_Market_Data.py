@@ -44,6 +44,18 @@ def records(con, sql, args=()):
 st.title("Market Data")
 st.caption("Mutual funds · Futures & Options · IPOs | Official-source data stored in your StockWise database")
 
+with st.expander("Refresh official data feeds", expanded=False):
+    st.caption("Downloads the latest available AMFI NAV snapshot, MFAPI scheme master, NSE derivatives bhavcopy and IPO source tables. This can take a few minutes.")
+    if st.button("Refresh market data now", type="primary", key="refresh_market_feeds"):
+        with st.spinner("Fetching official market data…"):
+            try:
+                from market_data.refresh_feeds import main as refresh_market_feeds
+                refresh_market_feeds()
+                st.success("Feed refresh finished. Check source health below for each feed's result.")
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Feed refresh failed: {exc}")
+
 con = connect()
 if con is None:
     st.warning(f"Market database not found at {DB_PATH}. Your stock dashboard remains available. Run the existing market-data ingestion script to create/populate this database.")
