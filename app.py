@@ -16,7 +16,6 @@ st.set_page_config(page_title='StockWise AI', page_icon='📈', layout='wide', i
 # --------------------------- Styling ---------------------------
 st.markdown('''
 <style>
-<style>
 .block-container{padding-top:1.2rem;padding-bottom:2rem;max-width:none;width:100%;padding-left:2rem;padding-right:2rem}
 [data-testid="stMetric"]{background:rgba(120,120,120,.08);padding:14px;border-radius:12px;border:1px solid rgba(128,128,128,.18)}
 </style>
