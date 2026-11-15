@@ -21,6 +21,48 @@ st.markdown('''
 </style>
 ''', unsafe_allow_html=True)
 
+# In-page market section navigation (keeps existing stock research unchanged).
+from options_chain import render_options_chain
+from pathlib import Path
+import json
+
+sw_section = st.radio(
+    "Market section",
+    ["Stocks & ETFs", "F&O · Options Chain"],
+    horizontal=True,
+    key="sw_market_section",
+)
+if sw_section == "F&O · Options Chain":
+    st.title("F&O · Options Chain")
+    instrument = st.selectbox("Underlying", ["NIFTY 50", "BANK NIFTY"], key="sw_option_underlying")
+    # A provider integration can write a normalized snapshot to this file.
+    # No synthetic options prices are generated.
+    snapshot_path = Path("data/options_chain") / ("nifty50.json" if instrument == "NIFTY 50" else "banknifty.json")
+    snapshot = None
+    if snapshot_path.is_file():
+        try:
+            snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            st.error(f"Cannot read options snapshot: {exc}")
+    if isinstance(snapshot, dict):
+        expiries = snapshot.get("expiries")
+        if isinstance(expiries, dict) and expiries:
+            expiry = st.selectbox("Expiry", list(expiries), key="sw_options_expiry")
+            contracts = expiries[expiry]
+        else:
+            expiry = snapshot.get("expiry")
+            contracts = snapshot.get("records")
+        render_options_chain(
+            records=contracts,
+            spot=snapshot.get("spot"),
+            instrument=instrument,
+            expiry=expiry,
+            quote_time=snapshot.get("quote_time"),
+        )
+    else:
+        render_options_chain(instrument=instrument)
+    st.stop()
+
 st.title('📈 StockWise AI')
 st.caption('Indian equity market dashboard • NSE & BSE • Technical analysis • CRISP insights • Machine-learning estimates')
 
