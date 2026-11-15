@@ -22,6 +22,138 @@ def index_history(symbol, period="1y"):
     except Exception:
         return pd.DataFrame()
 
+RANGES = {
+    "1D": ("1d", "5m"), "5D": ("5d", "15m"),
+    "1M": ("1mo", "1d"), "3M": ("3mo", "1d"),
+    "6M": ("6mo", "1d"), "1Y": ("1y", "1d"),
+    "5Y": ("5y", "1d"), "10Y": ("10y", "1d"),
+    "MAX": ("max", "1d"),
+}
+
+@st.cache_data(ttl=300, show_spinner=False)
+def range_history(symbol, period, interval):
+    try:
+        data = yf.Ticker(symbol).history(period=period, interval=interval, auto_adjust=False)
+        return data if data is not None else pd.DataFrame()
+    except Exception:
+        return pd.DataFrame()
+
+def show_range_chart(symbol, chart_key):
+    selected = st.radio("Chart period", list(RANGES), index=5, horizontal=True, key=chart_key)
+    period, interval = RANGES[selected]
+    data = range_history(symbol, period, interval)
+    if data.empty or not {"Open","High","Low","Close"}.issubset(data.columns):
+        st.warning(f"{selected} chart unavailable from the current provider.")
+        return
+    mode = st.radio("Chart style", ["Line", "Candlestick"], horizontal=True, key=chart_key+"_style")
+    fig = go.Figure()
+    if mode == "Candlestick":
+        fig.add_trace(go.Candlestick(x=data.index, open=data["Open"], high=data["High"], low=data["Low"], close=data["Close"], name="OHLC"))
+    else:
+        fig.add_trace(go.Scatter(x=data.index, y=data["Close"], mode="lines", name="Close", line=dict(color="#315BCB", width=2)))
+    fig.update_layout(height=420, xaxis_rangeslider_visible=False, margin=dict(l=8,r=8,t=15,b=8), template="plotly_white")
+    st.plotly_chart(fig, use_container_width=True)
+    st.caption(f"{selected} · {interval} interval · Latest candle: {data.index[-1]} · Yahoo Finance (may be delayed)")
+
+def show_constituents(name):
+    import csv
+    files = {
+        "NIFTY 50": ["data/ind_nifty50list.csv", "data/indices/nifty50.csv"],
+        "BANK NIFTY": ["data/ind_niftybanklist.csv", "data/indices/banknifty.csv"],
+        "BSE SENSEX": ["data/sensex_constituents.csv", "data/indices/sensex.csv"],
+    }
+    source = next((Path(p) for p in files[name] if Path(p).is_file()), None)
+    if source is None:
+        st.warning("Official constituent list not installed. Add the latest exchange constituent CSV to enable breadth, gainers, losers and stock prices.")
+        return
+    try:
+        constituents = pd.read_csv(source)
+    except Exception as exc:
+        st.error(f"Could not read constituent list: {exc}")
+        return
+    col = next((c for c in constituents.columns if c.lower().strip() in ("symbol","ticker","security code","security_code")), None)
+    if col is None:
+        st.warning("Constituent CSV needs a Symbol or Ticker column.")
+        return
+    rows = constituents.copy()
+    st.caption(f"Constituent file: {source} · {len(rows)} rows. Membership date and index weights depend on source.")
+    st.dataframe(rows, use_container_width=True, hide_index=True)
+    if st.button("Load latest constituent prices", key="sw_constituent_prices"):
+        symbols = rows[col].dropna().astype(str).str.strip().tolist()
+        if name != "BSE SENSEX":
+            symbols = [x if x.endswith((".NS",".BO")) else x+".NS" for x in symbols]
+        else:
+            symbols = [x if x.endswith((".NS",".BO")) else x+".BO" for x in symbols]
+        prices = []
+        progress = st.progress(0)
+        for i, symbol in enumerate(symbols):
+            try:
+                history = yf.Ticker(symbol).history(period="5d", interval="1d")
+                close = history["Close"].dropna()
+                if len(close) >= 2 and close.iloc[-2] > 0:
+                    prices.append({"Symbol":symbol,"Price":float(close.iloc[-1]),"Change %":float((close.iloc[-1]/close.iloc[-2]-1)*100)})
+            except Exception:
+                pass
+            progress.progress((i+1)/max(1,len(symbols)))
+        progress.empty()
+        if prices:
+            result = pd.DataFrame(prices).sort_values("Change %", ascending=False)
+            adv = int((result["Change %"] > 0).sum())
+            dec = int((result["Change %"] < 0).sum())
+            unchanged = int((result["Change %"] == 0).sum())
+            st.write(f"Advances: {adv} · Declines: {dec} · Unchanged: {unchanged} · Quotes received: {len(result)}/{len(symbols)}")
+            left,right = st.columns(2)
+            with left:
+                st.markdown("**Top Gainers**")
+                st.dataframe(result.head(10), hide_index=True, use_container_width=True)
+            with right:
+                st.markdown("**Top Losers**")
+                st.dataframe(result.tail(10).sort_values("Change %"), hide_index=True, use_container_width=True)
+        else:
+            st.warning("No valid constituent price changes returned.")
+
+def show_index_predictions(symbol):
+    st.caption("Experimental index forecast, trained on historical daily closes; not the StockWise stock-level production model.")
+    if not st.button("Train and evaluate index forecast", key="sw_index_forecast"):
+        st.info("Select the button to run a chronological backtest and estimate the next close.")
+        return
+    from sklearn.ensemble import RandomForestRegressor
+    from sklearn.metrics import mean_absolute_error
+    history = index_history(symbol, "5y")
+    if history.empty or len(history) < 220:
+        st.warning("Insufficient index history for a chronological evaluation.")
+        return
+    close = pd.to_numeric(history["Close"], errors="coerce").dropna()
+    features = pd.DataFrame(index=close.index)
+    for lag in [1,2,3,5,10,20]:
+        features[f"return_{lag}"] = close.pct_change(lag)
+    features["volatility_10"] = close.pct_change().rolling(10).std()
+    features["sma20_gap"] = close / close.rolling(20).mean() - 1
+    features["target_return"] = close.shift(-1) / close - 1
+    clean = features.replace([float("inf"),float("-inf")],float("nan")).dropna()
+    if len(clean) < 150:
+        st.warning("Not enough valid model samples.")
+        return
+    x = clean.drop(columns="target_return")
+    y = clean["target_return"]
+    split = int(len(clean)*0.8)
+    model = RandomForestRegressor(n_estimators=120, max_depth=7, min_samples_leaf=5, random_state=42, n_jobs=-1)
+    model.fit(x.iloc[:split], y.iloc[:split])
+    test_pred = model.predict(x.iloc[split:])
+    actual = close.loc[x.index[split:]].to_numpy() * (1+y.iloc[split:].to_numpy())
+    predicted = close.loc[x.index[split:]].to_numpy() * (1+test_pred)
+    mae = mean_absolute_error(actual, predicted)
+    baseline = close.loc[x.index[split:]].to_numpy()
+    baseline_mae = mean_absolute_error(actual, baseline)
+    latest = features.drop(columns="target_return").replace([float("inf"),float("-inf")],float("nan")).dropna().iloc[[-1]]
+    next_return = float(model.predict(latest)[0])
+    estimate = float(close.iloc[-1]) * (1+next_return)
+    a,b,c = st.columns(3)
+    a.metric("Next-session estimate", f"{estimate:,.2f}")
+    b.metric("Holdout MAE", f"{mae:,.2f}")
+    c.metric("No-change baseline MAE", f"{baseline_mae:,.2f}")
+    st.caption(f"Chronological 80/20 split · {len(clean)-split} test sessions · Experimental one-session regression. No guarantee of accuracy.")
+
 def render_index_details():
     st.markdown("""<style>
     .sw-index-title{font-size:2rem;font-weight:750;color:#B9664E}
@@ -60,22 +192,14 @@ def render_index_details():
     tabs = st.tabs(tab_names)
     with tabs[0]:
         st.subheader("Overview")
-        if not hist.empty:
-            st.line_chart(hist["Close"])
-            st.caption("Historical daily closes; not live streaming data.")
-        else:
-            st.info("Overview data unavailable.")
+        show_range_chart(symbol, "sw_overview_range")
+        st.caption("Market breadth and gainers/losers are in Stocks, based on installed constituent lists.")
     with tabs[1]:
         st.subheader("Charts")
-        if not hist.empty:
-            fig = go.Figure(go.Candlestick(x=hist.index,open=hist["Open"],high=hist["High"],low=hist["Low"],close=hist["Close"]))
-            fig.update_layout(height=480, xaxis_rangeslider_visible=False)
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("Chart data unavailable.")
+        show_range_chart(symbol, "sw_charts_range")
     with tabs[2]:
-        st.subheader("Constituent Stocks")
-        st.info("Index constituents and official index weights require a maintained NSE/BSE constituent dataset. No holdings are invented.")
+        st.subheader("Constituent Stocks · Advances & Declines")
+        show_constituents(name)
     with tabs[3]:
         st.subheader("Technicals")
         if not hist.empty and len(hist) >= 30:
@@ -116,7 +240,7 @@ def render_index_details():
         st.caption("NSE index and BSE SENSEX contracts require exchange-compatible data. The absence of a snapshot is not zero OI.")
     with tabs[5]:
         st.subheader("Predictions")
-        st.info("Index-specific validated forecasts are not yet connected. Stock-level model predictions must not be represented as index predictions.")
+        show_index_predictions(symbol)
     with tabs[6]:
         st.subheader("AI Summary")
         if not hist.empty and len(hist) >= 21:
