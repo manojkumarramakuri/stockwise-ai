@@ -39,21 +39,32 @@ def range_history(symbol, period, interval):
         return pd.DataFrame()
 
 def show_range_chart(symbol, chart_key):
-    selected = st.radio("Chart period", list(RANGES), index=5, horizontal=True, key=chart_key)
+    # The selector belongs BELOW the chart, like the supplied Share.Market reference.
+    selected = st.session_state.get(chart_key, "1D")
+    if selected not in RANGES:
+        selected = "1D"
     period, interval = RANGES[selected]
-    data = range_history(symbol, period, interval)
-    if data.empty or not {"Open","High","Low","Close"}.issubset(data.columns):
-        st.warning(f"{selected} chart unavailable from the current provider.")
-        return
-    mode = st.radio("Chart style", ["Line", "Candlestick"], horizontal=True, key=chart_key+"_style")
-    fig = go.Figure()
-    if mode == "Candlestick":
-        fig.add_trace(go.Candlestick(x=data.index, open=data["Open"], high=data["High"], low=data["Low"], close=data["Close"], name="OHLC"))
+    # Use recent intraday history and isolate the last actual trading session.
+    if selected == "1D":
+        data = range_history(symbol, "5d", "5m")
+        if not data.empty:
+            local_dates = pd.to_datetime(data.index).tz_convert("Asia/Kolkata").date if data.index.tz is not None else pd.to_datetime(data.index).date
+            data = data[local_dates == local_dates[-1]]
     else:
+        data = range_history(symbol, period, interval)
+    if data.empty or not {"Open", "High", "Low", "Close"}.issubset(data.columns):
+        st.warning(f"{selected} chart unavailable from the current provider.")
+    else:
+        fig = go.Figure()
         fig.add_trace(go.Scatter(x=data.index, y=data["Close"], mode="lines", name="Close", line=dict(color="#315BCB", width=2)))
-    fig.update_layout(height=420, xaxis_rangeslider_visible=False, margin=dict(l=8,r=8,t=15,b=8), template="plotly_white")
-    st.plotly_chart(fig, use_container_width=True)
-    st.caption(f"{selected} · {interval} interval · Latest candle: {data.index[-1]} · Yahoo Finance (may be delayed)")
+        fig.update_layout(height=420, xaxis_rangeslider_visible=False, margin=dict(l=8,r=8,t=15,b=8), template="plotly_white")
+        st.plotly_chart(fig, use_container_width=True, key=f"{chart_key}_plot")
+        latest = data.index[-1]
+        st.caption(f"{selected} · {interval} interval · Latest available candle: {latest} · Yahoo Finance (may be delayed)")
+        if selected == "1D":
+            st.caption("Displays the latest available trading session, including when the market is closed.")
+    st.radio("Chart period", list(RANGES), index=list(RANGES).index(selected), horizontal=True, key=chart_key)
+
 
 def show_constituents(name):
     import csv
