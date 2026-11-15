@@ -39,14 +39,14 @@ def _stock_rows(df, key):
         symbol = str(r["Ticker"]).split(".")[0]
         left, right = st.columns([3, 1.4], vertical_alignment="center")
         with left:
-        if st.button(f"{str(r['Company'])} · {symbol}", key=f'sw_open_{key}_{i}', use_container_width=True):
-            ticker=str(r['Ticker'])
-            st.session_state['sw_selected_stock']=ticker
-            st.session_state['selected_stock']=ticker
-            st.query_params['sw_symbol']=ticker
-            st.query_params['sw_view']='detail'
-            st.rerun()
-        st.markdown(f'<div class="sw-stock-symbol">{_esc(symbol)}</div>',unsafe_allow_html=True)
+            if st.button(f"{str(r['Company'])} · {symbol}", key=f'sw_open_{key}_{i}', use_container_width=True):
+                ticker=str(r['Ticker'])
+                st.session_state['sw_selected_stock']=ticker
+                st.session_state['selected_stock']=ticker
+                st.query_params['sw_symbol']=ticker
+                st.query_params['sw_view']='detail'
+                st.rerun()
+            st.markdown(f'<div class="sw-stock-symbol">{_esc(symbol)}</div>',unsafe_allow_html=True)
         with right:
             st.markdown(f'<div class="sw-stock-price" style="background:{bg};color:{color}">₹{price:,.2f}</div><div class="sw-stock-change" style="color:{color}">{change:+.2f}%</div>', unsafe_allow_html=True)
         st.markdown('<div class="sw-stock-divider"></div>', unsafe_allow_html=True)
