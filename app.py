@@ -21,46 +21,10 @@ st.markdown('''
 </style>
 ''', unsafe_allow_html=True)
 
-# In-page market section navigation (keeps existing stock research unchanged).
-from options_chain import render_options_chain
-from pathlib import Path
-import json
-
-sw_section = st.radio(
-    "Market section",
-    ["Stocks & ETFs", "F&O · Options Chain"],
-    horizontal=True,
-    key="sw_market_section",
-)
-if sw_section == "F&O · Options Chain":
-    st.title("F&O · Options Chain")
-    instrument = st.selectbox("Underlying", ["NIFTY 50", "BANK NIFTY"], key="sw_option_underlying")
-    # A provider integration can write a normalized snapshot to this file.
-    # No synthetic options prices are generated.
-    snapshot_path = Path("data/options_chain") / ("nifty50.json" if instrument == "NIFTY 50" else "banknifty.json")
-    snapshot = None
-    if snapshot_path.is_file():
-        try:
-            snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
-        except (OSError, ValueError) as exc:
-            st.error(f"Cannot read options snapshot: {exc}")
-    if isinstance(snapshot, dict):
-        expiries = snapshot.get("expiries")
-        if isinstance(expiries, dict) and expiries:
-            expiry = st.selectbox("Expiry", list(expiries), key="sw_options_expiry")
-            contracts = expiries[expiry]
-        else:
-            expiry = snapshot.get("expiry")
-            contracts = snapshot.get("records")
-        render_options_chain(
-            records=contracts,
-            spot=snapshot.get("spot"),
-            instrument=instrument,
-            expiry=expiry,
-            quote_time=snapshot.get("quote_time"),
-        )
-    else:
-        render_options_chain(instrument=instrument)
+# Existing home-page index cards open a unified in-page detail view.
+from index_intelligence import render_index_details
+if st.query_params.get("sw_index") in ("NIFTY 50", "BSE SENSEX", "BANK NIFTY"):
+    render_index_details()
     st.stop()
 
 st.title('📈 StockWise AI')
@@ -94,12 +58,16 @@ index_specs = [
 index_cols = st.columns(3)
 for col, (label, symbol) in zip(index_cols, index_specs):
     snapshot = get_index_snapshot(symbol)
-    if snapshot:
-        col.metric(label, f"{snapshot['value']:,.2f}", f"{snapshot['change']:+.2f}%")
-        col.caption(f"Latest available close: {snapshot['date']} · Yahoo Finance")
-    else:
-        col.metric(label, '—')
-        col.caption('Index quote currently unavailable from provider')
+    with col:
+        if snapshot:
+            st.metric(label, f"{snapshot['value']:,.2f}", f"{snapshot['change']:+.2f}%")
+            st.caption(f"Latest available close: {snapshot['date']} · Yahoo Finance")
+        else:
+            st.metric(label, '—')
+            st.caption('Index quote currently unavailable from provider')
+        if st.button(f"View {label} details", key=f"sw_open_{symbol}", use_container_width=True):
+            st.query_params["sw_index"] = label
+            st.rerun()
 st.divider()
 
 # Curated searchable universe. Any valid NSE/BSE symbol can also be entered manually.
