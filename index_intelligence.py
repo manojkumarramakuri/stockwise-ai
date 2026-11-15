@@ -66,8 +66,29 @@ def show_range_chart(symbol, chart_key):
     st.radio("Chart period", list(RANGES), index=list(RANGES).index(selected), horizontal=True, key=chart_key)
 
 
+@st.cache_data(ttl=600, show_spinner=False)
+def constituent_quotes(tickers):
+    # Fetch as a batch and cache results to avoid repeated provider calls.
+    try:
+        raw = yf.download(list(tickers), period="5d", interval="1d",
+                          auto_adjust=False, progress=False, threads=True,
+                          group_by="ticker")
+    except Exception:
+        return pd.DataFrame()
+    records = []
+    for ticker in tickers:
+        try:
+            close = raw[ticker]["Close"].dropna() if isinstance(raw.columns, pd.MultiIndex) else raw["Close"].dropna()
+            if len(close) < 2 or float(close.iloc[-2]) <= 0:
+                continue
+            records.append({"Ticker": ticker, "Price": float(close.iloc[-1]),
+                            "Change %": (float(close.iloc[-1]) / float(close.iloc[-2]) - 1) * 100,
+                            "Session": str(close.index[-1].date())})
+        except (KeyError, IndexError, TypeError, ValueError):
+            continue
+    return pd.DataFrame(records)
+
 def show_constituents(name):
-    import csv
     files = {
         "NIFTY 50": ["data/ind_nifty50list.csv", "data/indices/nifty50.csv"],
         "BANK NIFTY": ["data/ind_niftybanklist.csv", "data/indices/banknifty.csv"],
@@ -75,53 +96,48 @@ def show_constituents(name):
     }
     source = next((Path(p) for p in files[name] if Path(p).is_file()), None)
     if source is None:
-        st.warning("Official constituent list not installed. Add the latest exchange constituent CSV to enable breadth, gainers, losers and stock prices.")
+        st.warning("Constituent list unavailable. Add a current exchange membership CSV.")
         return
     try:
-        constituents = pd.read_csv(source)
+        members = pd.read_csv(source)
     except Exception as exc:
-        st.error(f"Could not read constituent list: {exc}")
+        st.error(f"Could not load constituents: {exc}")
         return
-    col = next((c for c in constituents.columns if c.lower().strip() in ("symbol","ticker","security code","security_code")), None)
-    if col is None:
-        st.warning("Constituent CSV needs a Symbol or Ticker column.")
+    symbol_col = next((c for c in members if c.lower().strip() in ("symbol","ticker","security code","security_code")), None)
+    if symbol_col is None:
+        st.warning("Constituent CSV requires a Symbol or Ticker column.")
         return
-    rows = constituents.copy()
-    st.caption(f"Constituent file: {source} · {len(rows)} rows. Membership date and index weights depend on source.")
-    st.dataframe(rows, use_container_width=True, hide_index=True)
-    if st.button("Load latest constituent prices", key="sw_constituent_prices"):
-        symbols = rows[col].dropna().astype(str).str.strip().tolist()
-        if name != "BSE SENSEX":
-            symbols = [x if x.endswith((".NS",".BO")) else x+".NS" for x in symbols]
-        else:
-            symbols = [x if x.endswith((".NS",".BO")) else x+".BO" for x in symbols]
-        prices = []
-        progress = st.progress(0)
-        for i, symbol in enumerate(symbols):
-            try:
-                history = yf.Ticker(symbol).history(period="5d", interval="1d")
-                close = history["Close"].dropna()
-                if len(close) >= 2 and close.iloc[-2] > 0:
-                    prices.append({"Symbol":symbol,"Price":float(close.iloc[-1]),"Change %":float((close.iloc[-1]/close.iloc[-2]-1)*100)})
-            except Exception:
-                pass
-            progress.progress((i+1)/max(1,len(symbols)))
-        progress.empty()
-        if prices:
-            result = pd.DataFrame(prices).sort_values("Change %", ascending=False)
-            adv = int((result["Change %"] > 0).sum())
-            dec = int((result["Change %"] < 0).sum())
-            unchanged = int((result["Change %"] == 0).sum())
-            st.write(f"Advances: {adv} · Declines: {dec} · Unchanged: {unchanged} · Quotes received: {len(result)}/{len(symbols)}")
-            left,right = st.columns(2)
-            with left:
-                st.markdown("**Top Gainers**")
-                st.dataframe(result.head(10), hide_index=True, use_container_width=True)
-            with right:
-                st.markdown("**Top Losers**")
-                st.dataframe(result.tail(10).sort_values("Change %"), hide_index=True, use_container_width=True)
-        else:
-            st.warning("No valid constituent price changes returned.")
+    suffix = ".BO" if name == "BSE SENSEX" else ".NS"
+    members = members.copy()
+    members["Ticker"] = members[symbol_col].astype(str).str.strip().map(
+        lambda v: v if v.endswith((".NS",".BO")) else v + suffix
+    )
+    quotes = constituent_quotes(tuple(members["Ticker"].dropna().unique()))
+    if quotes.empty:
+        st.warning("Constituent prices are unavailable from Yahoo Finance.")
+        st.dataframe(members, hide_index=True, use_container_width=True)
+        return
+    result = members.merge(quotes, on="Ticker", how="left")
+    valid = result.dropna(subset=["Change %"])
+    adv = int((valid["Change %"] > 0).sum())
+    dec = int((valid["Change %"] < 0).sum())
+    unchanged = int((valid["Change %"] == 0).sum())
+    c1,c2,c3 = st.columns(3)
+    c1.metric("Advances", adv)
+    c2.metric("Declines", dec)
+    c3.metric("Unchanged", unchanged)
+    st.progress(adv / len(valid) if len(valid) else 0)
+    st.caption(f"Prices available for {len(valid)}/{len(members)} constituents · Last available sessions: {', '.join(sorted(valid['Session'].dropna().unique()))} · Yahoo Finance (may be delayed)")
+    gainers, losers = st.tabs(["Gainers", "Losers"])
+    with gainers:
+        st.dataframe(valid.sort_values("Change %", ascending=False).head(10), hide_index=True, use_container_width=True)
+    with losers:
+        st.dataframe(valid.sort_values("Change %").head(10), hide_index=True, use_container_width=True)
+    st.subheader("All constituent stocks")
+    st.dataframe(result, hide_index=True, use_container_width=True)
+    if len(valid) < len(members):
+        st.info("Breadth reflects only constituents with valid quotes, not the full index.")
+
 
 def show_index_predictions(symbol):
     st.caption("Experimental index forecast, trained on historical daily closes; not the StockWise stock-level production model.")
