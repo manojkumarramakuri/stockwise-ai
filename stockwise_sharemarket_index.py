@@ -39,7 +39,14 @@ def _stock_rows(df, key):
         symbol = str(r["Ticker"]).split(".")[0]
         left, right = st.columns([3, 1.4], vertical_alignment="center")
         with left:
-            st.markdown(f'<div class="sw-stock-name">{_esc(str(r["Company"]))}</div><div class="sw-stock-symbol">{_esc(symbol)}</div>', unsafe_allow_html=True)
+        if st.button(f"{str(r['Company'])} · {symbol}", key=f'sw_open_{key}_{i}', use_container_width=True):
+            ticker=str(r['Ticker'])
+            st.session_state['sw_selected_stock']=ticker
+            st.session_state['selected_stock']=ticker
+            st.query_params['sw_symbol']=ticker
+            st.query_params['sw_view']='detail'
+            st.rerun()
+        st.markdown(f'<div class="sw-stock-symbol">{_esc(symbol)}</div>',unsafe_allow_html=True)
         with right:
             st.markdown(f'<div class="sw-stock-price" style="background:{bg};color:{color}">₹{price:,.2f}</div><div class="sw-stock-change" style="color:{color}">{change:+.2f}%</div>', unsafe_allow_html=True)
         st.markdown('<div class="sw-stock-divider"></div>', unsafe_allow_html=True)
@@ -91,19 +98,19 @@ def render():
     from options_chain import render_options_chain
     import json
     st.markdown("""<style>
-    .stApp,[data-testid="stAppViewContainer"]{background:#111315!important;color:#f3f4f6!important}
+    /* Keep the host application theme */
     .block-container{max-width:1120px;padding-top:1.1rem}
-    .sw-index-head{font-size:1.65rem;font-weight:750;color:#f3f4f6}
+    .sw-index-head{font-size:1.65rem;font-weight:750;color:#17233b}
     .sw-index-price{font-size:1.3rem;font-weight:700}
-    .sw-stock-name{font-size:1.03rem;font-weight:650;color:#f2f2f2}
-    .sw-stock-symbol{font-size:.85rem;color:#96999e;margin-top:4px}
+    .sw-stock-name{font-size:1.03rem;font-weight:650;color:#17233b}
+    .sw-stock-symbol{font-size:.85rem;color:#737985;margin-top:4px}
     .sw-stock-price{font-size:1.12rem;font-weight:700;text-align:right;border-radius:7px;padding:4px 9px}
     .sw-stock-change{text-align:right;font-size:.86rem;margin-top:4px}
-    .sw-stock-divider{border-bottom:1px solid #303234;margin:10px 0 16px}
+    .sw-stock-divider{border-bottom:1px solid #e2e5e9;margin:10px 0 16px}
     .sw-breadth{display:flex;height:8px;border-radius:20px;overflow:hidden;margin:20px 0}
-    div[data-testid="stTabs"] button{color:#a6a8ac}
-    div[data-testid="stTabs"] button[aria-selected="true"]{color:#69a7fa!important}
-    div[data-testid="stMetric"]{background:#202327;border:1px solid #303234}
+    div[data-testid="stTabs"] button{color:#657080}
+    div[data-testid="stTabs"] button[aria-selected="true"]{color:#315bcb!important}
+    div[data-testid="stMetric"]{background:#fff;border:1px solid #e0e5eb}
     </style>""",unsafe_allow_html=True)
     names=list(INDEXES)
     selected=st.query_params.get("sw_index",names[0])
@@ -133,6 +140,23 @@ def render():
         st.warning("Index price currently unavailable.")
     tabs=st.tabs(["Overview","Charts","Stocks","Technicals","F&O","Predictions","AI Summary"])
     with tabs[0]:
+        show_range_chart(symbol, 'sw_overview_range')
+        st.markdown('### Open & Close')
+        if not hist.empty and {'Open','High','Low','Close'}.issubset(hist.columns):
+            daily=hist.dropna(subset=['Open','High','Low','Close'])
+            if not daily.empty:
+                last=daily.iloc[-1]
+                prev=float(daily['Close'].iloc[-2]) if len(daily)>1 else None
+                a,b,c=st.columns(3)
+                a.metric('Open', f"{float(last['Open']):,.2f}")
+                b.metric('Close', f"{float(last['Close']):,.2f}")
+                c.metric('Previous Close', f'{prev:,.2f}' if prev is not None else '—')
+                d,e=st.columns(2)
+                d.metric('Day High', f"{float(last['High']):,.2f}")
+                e.metric('Day Low', f"{float(last['Low']):,.2f}")
+                st.caption(f'Latest OHLC session: {daily.index[-1].date()}')
+        else:
+            st.info('OHLC data unavailable')
         _breadth(name,constituent_quotes)
     with tabs[1]:
         show_range_chart(symbol,"sw_dark_chart_range")
@@ -152,7 +176,7 @@ def render():
             fig=go.Figure()
             for label,values in [("Close",close),("SMA 20",close.rolling(20).mean()),("SMA 50",close.rolling(50).mean())]:
                 fig.add_trace(go.Scatter(x=values.index,y=values,name=label))
-            fig.update_layout(template="plotly_dark",paper_bgcolor="#111315",plot_bgcolor="#111315",height=400)
+            fig.update_layout(template="plotly_white",paper_bgcolor="#fff",plot_bgcolor="#fff",height=400)
             st.plotly_chart(fig,use_container_width=True)
         else:
             st.info("Insufficient price history for indicators.")
