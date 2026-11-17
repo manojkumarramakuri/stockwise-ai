@@ -182,6 +182,8 @@ def show_index_predictions(symbol):
     st.caption(f"Chronological 80/20 split · {len(clean)-split} test sessions · Experimental one-session regression. No guarantee of accuracy.")
 
 def render_index_details():
+    from stockwise_sharemarket_index import render
+    return render()
     st.markdown("""<style>
     .sw-index-title{font-size:2rem;font-weight:750;color:#B9664E}
     div[data-testid="stMetric"]{border:1px solid #A5AD9166;border-radius:14px;padding:12px}
