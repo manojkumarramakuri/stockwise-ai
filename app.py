@@ -121,7 +121,31 @@ PERIODS = {'1D': ('1d', '5m'), '3M': ('3mo', '1d'), '6M': ('6mo', '1d'), '1Y': (
 # --------------------------- Data functions ---------------------------
 @st.cache_data(ttl=300, show_spinner=False)
 def get_history(symbol: str, period: str, interval: str) -> pd.DataFrame:
-    df = yf.Ticker(symbol).history(period=period, interval=interval, auto_adjust=True)
+    # Exchange-backed history is authoritative when available.
+    import os
+    import requests
+    df = pd.DataFrame()
+    try:
+        base = os.environ.get("STOCKWISE_API_BASE", "http://127.0.0.1:8000").rstrip("/")
+        response = requests.get(
+            f"{base}/api/history/{symbol}",
+            params={"period": period, "interval": interval},
+            timeout=30,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if isinstance(payload, dict) and payload.get("data"):
+            candidate = pd.DataFrame(payload["data"])
+            if "Date" in candidate and "Close" in candidate:
+                candidate["Date"] = pd.to_datetime(candidate["Date"], errors="coerce")
+                candidate["Close"] = pd.to_numeric(candidate["Close"], errors="coerce")
+                df = candidate.dropna(subset=["Date", "Close"]).set_index("Date").sort_index()
+    except (requests.RequestException, ValueError, TypeError, KeyError):
+        pass
+    if df.empty:
+        if symbol.upper().endswith(".BO"):
+            return pd.DataFrame()
+        df = yf.Ticker(symbol).history(period=period, interval=interval, auto_adjust=True)
     if df is None or df.empty:
         return pd.DataFrame()
     df = df.copy()
